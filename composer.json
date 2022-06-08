@@ -1,0 +1,9 @@
+{
+  "require": {
+    "php": ">=7.3.0",
+    "phpoffice/phpspreadsheet": "*",
+    "ext-ftp": "*",
+    "ext-dom": "*",
+    "vlucas/phpdotenv": "^5.4"
+  }
+}
