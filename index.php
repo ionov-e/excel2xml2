@@ -4,9 +4,11 @@ include "vendor/autoload.php";
 
 use Dotenv\Dotenv;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Worksheet\RowCellIterator;
+use PhpOffice\PhpSpreadsheet\Worksheet\RowIterator;
 
 
-const POST_EXCEL_FILENAME = 'excel';                // Наименование файла в теле POST
+const FILE_INPUT_EXCEL = 'excel';                // Наименование файла в теле POST
 const MIN_BARCODE_DIGIT_COUNT = 6;                  // Меньше этого значения - высветится предупреждение
 
 const LOG_FOLDER_ROOT = 'log';                      // Произвольное имя папки для хранения логов
@@ -72,12 +74,12 @@ function main(&$alertClass, &$alertMsg)
 {
     try {
 
-        if (!isset($_FILES[POST_EXCEL_FILENAME]) || 0 == $_FILES[POST_EXCEL_FILENAME][FILES_SIZE_KEY]) {
+        if (!isset($_FILES[FILE_INPUT_EXCEL]) || 0 == $_FILES[FILE_INPUT_EXCEL][FILES_SIZE_KEY]) {
             throw new Exception("Таблица не прислана");
         }
 
         // Создание и отправка XML
-        processData(POST_EXCEL_FILENAME, $alertMsg);
+        processData(FILE_INPUT_EXCEL, $alertMsg);
 
         if (empty($alertMsg)) {
             $alertClass = "success";
@@ -96,7 +98,7 @@ function main(&$alertClass, &$alertMsg)
         $alertMsg = $e->getMessage();
     }
 
-    logMsg("Пользователю высветилось в блоке alert: $alertMsg");
+    logMsg("Alert message: $alertMsg");
 }
 
 
@@ -149,9 +151,12 @@ function excelToArray(string $excelPostName, string &$alertMsg): array
     $headerIsPassed = false;    // Используется для пропуска первой строки экселя
     $setIds = [];               // Здесь храним все set id - на проверку повторений
     $identicalSetIds = [];      // Здесь храним все повторные set id - таких не должно быть
-    $shortBarcodes = [];        // Здесь храним все короткие баркоды - таких не должно быть
+    $shortValues = [];        // Здесь храним все короткие баркоды - таких не должно быть
 
 
+    /**
+     * @var $row RowIterator
+     */
     foreach ($worksheet->getRowIterator() as $row) { // Здесь перебираются строки
 
         if (!$headerIsPassed) { // Чтобы пропустить первую строку из файла (шапка)
@@ -163,27 +168,38 @@ function excelToArray(string $excelPostName, string &$alertMsg): array
 
         $isFirstCell = true; // В первом столбце айдишники - к ним немного другие действие
 
+        /**
+         * @var $cell RowCellIterator
+         */
         foreach ($row->getCellIterator() as $cell) { // Добавляем каждую ячейку строки отдельными элементами в массив
-            if (!empty($cell->getValue())) {
-                $cellValue = $cell->getValue();
 
-                if ($isFirstCell) { // Проверка айдишник ли это
+            if (empty($cell->getValue())) {
+                break;
+            }
 
-                    if (in_array($cellValue, $setIds)) { // Если повторяется Set ID - пропускаем строку и оповещаем о повторе
-                        $identicalSetIds[] = $cellValue;
-                        break;
-                    }
+            $cellValue = $cell->getValue();
 
-                    $setIds[] = $cellValue; // Добавили в список айдишников
-                    $isFirstCell = false; // Следующие из этой строки уже будут не айди
+            if (strlen(strval($cellValue)) <= MIN_BARCODE_DIGIT_COUNT) { // Проверка если баркод меньше кол-ва символов
+                $shortValues[] = $cellValue;
+                if ($isFirstCell) {
+                    break;
+                }
+                continue;
+            }
 
-                } elseif (strlen(strval($cellValue)) <= MIN_BARCODE_DIGIT_COUNT) { // Проверка если баркод меньше кол-ва символов
-                    $shortBarcodes[] = $cellValue;
-                    continue;
+            if ($isFirstCell) { // Проверка айдишник ли это
+
+                if (in_array($cellValue, $setIds)) { // Если повторяется Set ID - пропускаем строку и оповещаем о повторе
+                    $identicalSetIds[] = $cellValue;
+                    break;
                 }
 
-                $rowAsArray[] = $cellValue;
+                $setIds[] = $cellValue; // Добавили в список айдишников
+                $isFirstCell = false; // Следующие из этой строки уже будут не айди
+
             }
+
+            $rowAsArray[] = $cellValue;
         }
 
         if (!empty($rowAsArray)) {
@@ -193,11 +209,11 @@ function excelToArray(string $excelPostName, string &$alertMsg): array
     }
 
     if (!empty($identicalSetIds)) {
-        $alertMsg = sprintf("%s <br> %sВстретились неуникальные ID: %s", $alertMsg, PHP_EOL, implode(", ", $identicalSetIds));
+        $alertMsg = sprintf("%s <br> %sВстретились неуникальные ID: %s", $alertMsg, PHP_EOL, implode(", ", array_unique($identicalSetIds)));
     }
 
-    if (!empty($shortBarcodes)) {
-        $alertMsg = sprintf("%s <br> %sВстретились баркоды меньше %d символов: %s", $alertMsg, PHP_EOL, MIN_BARCODE_DIGIT_COUNT, implode(", ", $shortBarcodes));
+    if (!empty($shortValues)) {
+        $alertMsg = sprintf("%s <br> %sВстретились баркоды меньше %d символов: %s", $alertMsg, PHP_EOL, MIN_BARCODE_DIGIT_COUNT, implode(", ", array_unique($shortValues)));
     }
 
     return $arrayFromExcel;

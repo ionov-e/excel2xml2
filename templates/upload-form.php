@@ -25,8 +25,8 @@
     <form action="" method="post" class="was-validated" enctype="multipart/form-data">
         <div class="form-group">
             <label for="pwd">Эксель:</label>
-            <input type="file" class="form-control" id="<?= POST_EXCEL_FILENAME ?>" placeholder="Выберите файл"
-                   name="<?= POST_EXCEL_FILENAME ?>">
+            <input type="file" class="form-control" id="<?= FILE_INPUT_EXCEL ?>" placeholder="Выберите файл"
+                   name="<?= FILE_INPUT_EXCEL ?>">
         </div>
         <button id="my-listen-btn-submit" type="submit" name="<?= POST_SUBMIT ?>" class="btn btn-primary my-btn-listen">
             Отправить
